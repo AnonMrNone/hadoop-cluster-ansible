@@ -1,0 +1,89 @@
+- name: setting up hadoop cluster
+  hosts: all
+  vars:
+          master: /hadoopmaster
+          worker: /hadoopslave          
+  tasks:
+          - name: hadoop software present
+            copy:
+                    src: /root/hadoop-1.2.1-1.x86_64.rpm
+                    dest: /root/
+            when: inventory_hostname in groups['vm'] or inventory_hostname in groups['vm2']
+          - name: jdk software present
+            copy:
+                    src: /root/jdk-8u171-linux-x64.rpm
+                    dest: /root/
+            when: inventory_hostname in groups['vm'] or inventory_hostname in groups['vm2']
+          - name: check jdk software installed
+            command: jps
+            register: cmdjps
+            ignore_errors: yes
+            when: inventory_hostname in groups['vm'] or inventory_hostname in groups['vm2']
+          - name: check hadoop software insalled
+            command: hadoop -version
+            register: cmdhadoop
+            ignore_errors: yes
+            when: inventory_hostname in groups['vm'] or inventory_hostname in groups['vm2']
+          - name: jdk software install
+            command: rpm -i jdk-8u171-linux-x64.rpm 
+            when: (inventory_hostname in groups['vm'] or inventory_hostname in groups['vm2']) and ( cmdjps.rc != 0 ) 
+          - name: hadoop software install
+            command: rpm -i  hadoop-1.2.1-1.x86_64.rpm --force
+            when: (inventory_hostname in groups['vm'] or inventory_hostname in groups['vm2']) and ( cmdhadoop.rc != 0 ) 
+          - name: configure hdfs-site data node
+            template:
+                    src: /root/hdfs-site-data.xml.j2 
+                    dest: /etc/hadoop/hdfs-site.xml
+            when: inventory_hostname in groups['vm2']
+          - name: make core-site for data node
+            template:
+                    src: /root/core-site-data.xml.j2
+                    dest: /root/practice/core-site-data.xml.j2
+            when: inventory_hostname in groups['vm']
+            delegate_to: 127.0.0.1
+          - name: configure core-site data node
+            template:
+                    src: /root/practice/core-site-data.xml.j2
+                    dest: /etc/hadoop/core-site.xml
+            when: inventory_hostname in groups['vm2']
+          - name: configure hdfs-site name node
+            template:
+                    src: /root/hdfs-site-name.xml.j2
+                    dest: /etc/hadoop/hdfs-site.xml
+            when: inventory_hostname in groups['vm']
+          - name: configure core-site name node
+            template:
+                    src:  /root/core-site-name.xml.j2
+                    dest: /etc/hadoop/core-site.xml
+            when: inventory_hostname in groups['vm']
+          - name: making master dir
+            file:
+                    path: "{{ master }}"
+                    state: directory
+            when: inventory_hostname in groups['vm']
+          - name: making worker dir
+            file:
+                    path: "{{ worker }}"
+                    state: directory
+            when: inventory_hostname in groups['vm2']
+          - name: check namenode formatted
+            stat:
+                    path: /hadoopmaster/current
+            register: format
+            when: inventory_hostname in groups['vm']
+          - name: formatting namenode
+            shell: echo Y | hadoop namenode -format
+            when: inventory_hostname in groups['vm'] and (format.stat.exists == "False")
+          - name: starting namenode
+            command: hadoop-daemon.sh start namenode
+            when: inventory_hostname in groups['vm']
+          - name: pause of a second
+            pause:
+                    seconds: 3
+          - name: starting datanode
+            command: hadoop-daemon.sh start datanode
+            when: inventory_hostname in groups['vm2']
+          
+
+
+
